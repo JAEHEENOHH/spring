@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="board">
+
+	<resultMap type="commentDTO" id="commentDTOmap">
+		<result column="cno" property="no"/>
+		<result column="board_no" property="board_no"/>
+		<result column="ccomment" property="comment"/>
+		<result column="cdate" property="cdate"/>
+		<result column="clike" property="clike"/>
+		<result column="mno" property="mno"/>
+		<result column="mid" property="mid"/>
+		<result column="mname" property="mname"/>
+		<result column="cip" property="cip"/>
+	</resultMap>
+
+	<select id="totalRecordCount" resultType="Integer">
+		SELECT COUNT(*) FROM board WHERE board_del='1'
+	</select>
+
+	<select id="boardList" parameterType="Integer" resultType="boardDTO">
+		SELECT board_no, board_title, board_write as mname, board_date, board_count, comment
+		FROM boardview LIMIT #{pageNo}, 10
+	</select>
+	
+	<select id="detail" resultType="boardDTO" parameterType="Integer">
+		SELECT b.board_no, b.board_title, b.board_content, m.mname, m.mid, 
+				b.board_date, b.board_ip, 
+				(SELECT COUNT(*) FROM comment WHERE board_no=b.board_no) AS comment
+		FROM board b JOIN member m ON b.mno=m.mno 
+		WHERE b.board_no=#{no} AND b.board_del = '1'
+	</select>
+	
+	<insert id="write" parameterType="writeDTO">
+		INSERT INTO board (board_title, board_content, mno, board_ip) 
+      	VALUES (#{title}, #{content}, (SELECT mno FROM member WHERE mid=#{mid}), #{ip})
+      	<selectKey resultType="Integer" keyProperty="board_no" order="AFTER">
+      		SELECT LAST_INSERT_ID()
+      	</selectKey>
+	</insert>
+	
+	<insert id="commentWrite" parameterType="commentDTO">
+		INSERT INTO comment (board_no, ccomment, mno, cip) 
+		VALUES (#{no}, #{comment}, (SELECT mno FROM member WHERE mid=#{mid}), #{cip})
+	</insert>
+	
+	<select id="commentsList" parameterType="Integer" resultMap="commentDTOmap">
+		SELECT cno, ccomment, cdate, clike, mid, mname, cip
+		FROM commentview
+		WHERE board_no=#{no}
+	</select>
+	
+	<update id="postDel" parameterType="writeDTO">
+		<![CDATA[ 
+		UPDATE board SET board_del='0' 
+		WHERE board_no=#{board_no} AND mno=(SELECT mno FROM member WHERE mid=#{mid})
+		]]>
+	</update>
+	
+	<update id="deleteComment" parameterType="commentDTO">
+		UPDATE comment SET cdel=0
+		WHERE cno=#{no} AND board_no=#{board_no} AND mno=(SELECT mno FROM member WHERE mid=#{mid})
+	</update>
+	
+	<insert id="countUP" parameterType="boardDTO">
+		<selectKey keyProperty="board_count" resultType="Integer" order="BEFORE">
+			SELECT count(*)
+			FROM visitcount
+			WHERE board_no=#{board_no} AND mno=(SELECT mno FROM member WHERE mid=#{mid})
+		</selectKey>
+		<if test="board_count == 0">		
+			INSERT INTO visitcount (board_no, mno) 
+			VALUES (#{board_no}, (SELECT mno FROM member WHERE mid=#{mid}))
+		</if>
+		<if test="board_count != 0">		
+			SELECT count(*) FROM dual
+		</if>
+	</insert>
+	
+	<update id="likeUp" parameterType="commentDTO">
+		UPDATE comment SET clike = clike + 1 WHERE cno=#{no}
+	</update>
+	
+</mapper>
